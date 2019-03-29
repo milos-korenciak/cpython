@@ -1603,6 +1603,7 @@ using the :meth:`loop.add_signal_handler` method::
 
     def ask_exit(signame):
         print("got signal %s: exit" % signame)
+        loop = asyncio.get_running_loop()
         loop.stop()
 
     async def main():
