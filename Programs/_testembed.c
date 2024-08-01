@@ -16,11 +16,9 @@
 
 // These functions were removed from Python 3.13 API but are still exported
 // for the stable ABI. We want to test them in this program.
-extern void Py_SetProgramName(const wchar_t *program_name);
 extern void PySys_AddWarnOption(const wchar_t *s);
 extern void PySys_AddXOption(const wchar_t *s);
 extern void Py_SetPath(const wchar_t *path);
-extern void Py_SetPythonHome(const wchar_t *home);
 
 
 int main_argc;
@@ -172,14 +170,22 @@ PyInit_embedded_ext(void)
 static int test_repeated_init_exec(void)
 {
     if (main_argc < 3) {
-        fprintf(stderr, "usage: %s test_repeated_init_exec CODE\n", PROGRAM);
+        fprintf(stderr,
+                "usage: %s test_repeated_init_exec CODE ...\n", PROGRAM);
         exit(1);
     }
     const char *code = main_argv[2];
+    int loops = main_argc > 3
+        ? main_argc - 2
+        : INIT_LOOPS;
 
-    for (int i=1; i <= INIT_LOOPS; i++) {
-        fprintf(stderr, "--- Loop #%d ---\n", i);
+    for (int i=0; i < loops; i++) {
+        fprintf(stderr, "--- Loop #%d ---\n", i+1);
         fflush(stderr);
+
+        if (main_argc > 3) {
+            code = main_argv[i+2];
+        }
 
         _testembed_Py_InitializeFromConfig();
         int err = PyRun_SimpleString(code);
@@ -576,7 +582,11 @@ static int test_init_from_config(void)
     _PyPreConfig_InitCompatConfig(&preconfig);
 
     putenv("PYTHONMALLOC=malloc_debug");
+#ifndef Py_GIL_DISABLED
     preconfig.allocator = PYMEM_ALLOCATOR_MALLOC;
+#else
+    preconfig.allocator = PYMEM_ALLOCATOR_MIMALLOC;
+#endif
 
     putenv("PYTHONUTF8=0");
     Py_UTF8Mode = 0;
@@ -765,7 +775,11 @@ static int test_init_dont_parse_argv(void)
 static void set_most_env_vars(void)
 {
     putenv("PYTHONHASHSEED=42");
+#ifndef Py_GIL_DISABLED
     putenv("PYTHONMALLOC=malloc");
+#else
+    putenv("PYTHONMALLOC=mimalloc");
+#endif
     putenv("PYTHONTRACEMALLOC=2");
     putenv("PYTHONPROFILEIMPORTTIME=1");
     putenv("PYTHONNODEBUGRANGES=1");
@@ -851,7 +865,11 @@ static int test_init_env_dev_mode_alloc(void)
     /* Test initialization from environment variables */
     Py_IgnoreEnvironmentFlag = 0;
     set_all_env_vars_dev_mode();
+#ifndef Py_GIL_DISABLED
     putenv("PYTHONMALLOC=malloc");
+#else
+    putenv("PYTHONMALLOC=mimalloc");
+#endif
     _testembed_Py_InitializeFromConfig();
     dump_config();
     Py_Finalize();
